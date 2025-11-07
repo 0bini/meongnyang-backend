@@ -105,9 +105,15 @@ class BcsCheckupResult(models.Model):
     """BCS 자가 진단 결과 저장 모델"""
     pet = models.ForeignKey(Pet, on_delete=models.CASCADE, related_name='bcs_results')
     answers = models.JSONField(verbose_name="답변 목록") # 예: [1, 2, 1]
-    result_stage = models.CharField(max_length=50, verbose_name="진단 결과 단계") # 예: "6단계 - 다소 과체중"
+    
+    # --- ⬇️ [수정] default 값을 추가합니다. ⬇️ ---
+    stage_number = models.IntegerField(verbose_name="진단 단계 (숫자)", default=5) 
+    stage_text = models.CharField(max_length=100, verbose_name="진단 결과 (텍스트)", default="이상적")
+    # --- ⬆️ [수정] ---
+
     checkup_date = models.DateTimeField(auto_now_add=True, verbose_name="진단 일시")
 
     def __str__(self):
-        return f"{self.pet.name} BCS 결과 ({self.checkup_date.date()})"
+        # [수정] __str__도 새 필드를 반영하도록 변경
+        return f"{self.pet.name} BCS 결과 ({self.checkup_date.date()}) - {self.stage_number}단계: {self.stage_text}"
 

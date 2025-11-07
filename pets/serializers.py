@@ -82,7 +82,12 @@ class BcsCheckupResultSerializer(serializers.ModelSerializer):
     """
     class Meta:
         model = BcsCheckupResult
-        # API 7.4의 Request Body ('answers')와 Response ('result_stage' 등)
-        fields = ['id', 'answers', 'result_stage', 'checkup_date']
-        # 'result_stage'와 'checkup_date'는 서버에서 계산하고 저장하므로 읽기 전용
-        read_only_fields = ['id', 'result_stage', 'checkup_date']
+        
+        # --- ⬇️ [수정] 'result_stage'를 'stage_number', 'stage_text'로 변경 ---
+        # API 7.4 Request Body ('answers')와 Response (새 필드들)
+        fields = ['id', 'answers', 'stage_number', 'stage_text', 'checkup_date']
+        
+        # 'stage_number', 'stage_text', 'checkup_date'는 
+        # 서버에서 계산하고 저장하므로 읽기 전용
+        read_only_fields = ['id', 'stage_number', 'stage_text', 'checkup_date']
+        # --- ⬆️ [수정] ---

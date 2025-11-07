@@ -12,6 +12,69 @@ from django.utils import timezone
 from django.db.models import Sum, Avg
 from datetime import date # d_day 계산을 위해 import
 from rest_framework.exceptions import ValidationError # 예외 처리를 위해 import
+from django.conf import settings # 1. settings.py의 API 키를 가져오기 위해
+import google.generativeai as genai # 2. Google AI 라이브러리
+import json # 3. AI 응답(JSON)을 파싱하기 위해
+import requests
+
+# --- ⬇️ Kakao API 헬퍼 함수 (AiCheckupView 클래스 *위에* 추가) ⬇️ ---
+def search_nearby_clinics(api_key, lat, lng):
+    """
+    Kakao 키워드 검색 API를 사용해 주변 동물병원을 검색합니다.
+    (수정: 프론트엔드 디자인에 맞게 'subtitle' 필드 추가)
+    """
+    if not api_key:
+        # (오류 반환 형식도 디자인에 맞게 수정)
+        return [{"id": 0, "name": "API 키 미설정", "subtitle": "Kakao API 키가 서버에 설정되지 않았습니다.", "phone": ""}]
+
+    url = "https://dapi.kakao.com/v2/local/search/keyword.json"
+    headers = {"Authorization": f"KakaoAK {api_key}"}
+    params = {
+        "query": "동물병원",
+        "y": str(lat),
+        "x": str(lng),
+        "radius": 2000,
+        "sort": "distance",
+    }
+    
+    try:
+        response = requests.get(url, headers=headers, params=params, timeout=3)
+        response.raise_for_status() 
+        data = response.json()
+
+        clinics = []
+        # API 명세서에 맞게 데이터 가공
+        for doc in data.get("documents", []):
+            
+            # --- ⬇️ [수정] 이 부분이 변경되었습니다 ⬇️ ---
+            
+            # 1. 주소와 전화번호를 가져옵니다.
+            address = doc.get("road_address_name") or doc.get("address_name") or "주소 정보 없음"
+            phone = doc.get("phone") or "전화번호 정보 없음"
+            
+            # 2. 디자인이 요구하는 "부제목" 문자열을 생성합니다.
+            #    (예: "제주시 연동 123-45 | 064-123-4567")
+            subtitle_string = f"{address} | {phone}"
+
+            # 3. 'subtitle' 필드에 담아 반환합니다.
+            clinics.append({
+                "id": doc.get("id"),
+                "name": doc.get("place_name"),
+                "subtitle": subtitle_string,  # ⬅️ "부제목" 필드
+                "phone": phone,               # ⬅️ "전화" 버튼 클릭 시 사용할 원본 전화번호
+                "distance": int(doc.get("distance")) 
+            })
+            # --- ⬆️ [수정] 여기까지 ⬆️ ---
+        
+        if not clinics:
+            return [{"id": 0, "name": "검색 결과 없음", "subtitle": "2km 이내에 '동물병원' 검색 결과가 없습니다.", "phone": ""}]
+        
+        return clinics
+
+    except requests.exceptions.RequestException as e:
+        return [{"id": 0, "name": "API 호출 오류", "subtitle": f"Kakao API 호출 중 오류 발생: {e}", "phone": ""}]
+    except Exception as e:
+        return [{"id": 0, "name": "오류", "subtitle": f"처리 중 알 수 없는 오류 발생: {e}", "phone": ""}]
 
 # --- 권한 설정 ---
 class IsOwnerOrReadOnly(permissions.BasePermission):
@@ -430,35 +493,115 @@ class AiCheckupView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
     def post(self, request, pet_id):
-        # 1. 반려동물 존재 확인
+        # 1. 반려동물 존재 확인 (기존과 동일)
         try:
             pet = Pet.objects.get(id=pet_id, owner=request.user)
         except Pet.DoesNotExist:
             return Response({"error": "반려동물 정보를 찾을 수 없거나 권한이 없습니다."}, status=status.HTTP_404_NOT_FOUND)
 
-        # 2. 프론트엔드에서 보낸 증상 목록(symptoms)과 위치(location) 받기
+        # 2. 증상 목록 받기 (기존과 동일)
         symptoms = request.data.get('symptoms', []) # 예: ["구토", "설사"]
-        user_location = request.data.get('location') # 예: {"lat": 33.450, "lng": 126.570}
+        user_location = request.data.get('location') # 병원 검색용 (여기선 사용 안 함)
 
         if not symptoms:
             return Response({"error": "증상을 선택해주세요."}, status=status.HTTP_400_BAD_REQUEST)
 
-        # 3. (가상) AI 모델(LLM API 등) 호출
-        # prompt = f"{pet.species} {pet.age}살 {pet.breed}이(가) {', '.join(symptoms)} 증상을 보입니다. 의심 질환과 대처 방안을 알려줘."
-        # ai_response = call_my_llm_api(prompt) 
+        # --- ⬇️ [수정] 3. Gemini API 호출 로직 ⬇️ ---
+        try:
+            # 3-1. API 키 설정
+            api_key = settings.GOOGLE_GEMINI_API_KEY
+            if not api_key:
+                # settings.py에 키가 없거나 환경 변수가 로드되지 않은 경우
+                raise ValueError("GOOGLE_GEMINI_API_KEY가 설정되지 않았습니다.")
+            
+            genai.configure(api_key=api_key)
+
+            # 3-2. AI 모델 및 프롬프트 준비
+            model = genai.GenerativeModel('gemini-1.5-flash') # 최신 모델 (gemini-pro도 가능)
+            
+            # 펫의 나이 계산 (HealthPageView 로직 참고)
+            pet_age_days = (date.today() - pet.birth_date).days
+            pet_age = pet_age_days // 365 # 간단한 나이 계산
+            
+            symptoms_str = ", ".join(symptoms) # 리스트를 "구토, 설사" 같은 문자열로 변경
+
+            # AI에게 JSON 형식으로 응답하도록 강력하게 요청하는 프롬프트
+            prompt = f"""
+            당신은 수의사 역할을 하는 반려동물 건강 AI 어시스턴트입니다.
+            아래 반려동물 정보와 주요 증상을 바탕으로, '의심 질환'과 '보호자 대처 방안'을 분석해주세요.
+
+            [반려동물 정보]
+            - 종류: {pet.species}
+            - 품종: {pet.breed}
+            - 나이: {pet_age}살
+            - 성별: {pet.gender}
+            - 중성화 여부: {'예' if pet.is_neutered else '아니오'}
+            - 특이사항: {pet.special_notes or '없음'}
+
+            [주요 증상]
+            {symptoms_str}
+
+            [요청]
+            분석한 결과를 반드시 다음의 JSON 형식으로만 응답해주세요.
+            다른 설명이나 마크다운 표기(```json) 없이 순수한 JSON 객체만 반환해야 합니다.
+            'recommendations'는 반드시 3개 이상의 항목으로 구성된 리스트(배열)여야 합니다.
+
+            {{
+              "analysis": {{
+                "issue_title": "(AI가 판단한 '의심 질환'의 요약 제목. 예: '복합적 문제' 또는 '급성 위장염 의심')",
+                "description": "(프론트엔드 디자인의 '의심 질환' 박스에 들어갈 상세 설명. 예: '선택하신 '구토', '설사' 증상은...')"
+              }},
+              "recommendations": [
+                "(프론트엔드 디자인의 '권장 대처 방안' 리스트의 첫 번째 항목. 예: '유산균을 급여하고 식단을 점검해주세요.')",
+                "(두 번째 항목. 예: '신선한 물을 마실 수 있도록 수분 섭취를...')"
+              ]
+            }}
+            """
+
+            # 3-3. AI 모델 호출
+            ai_response = model.generate_content(prompt)
+            
+            # 3-4. AI 응답(텍스트)을 JSON 객체로 파싱
+            analysis_result = json.loads(ai_response.text)
+
+        except json.JSONDecodeError:
+            # AI가 JSON 형식이 아닌 일반 텍스트로 답했을 경우 (예: "죄송합니다...")
+            analysis_result = {
+                "suspected_issue": "AI 응답 분석 실패",
+                "recommendation": f"AI가 JSON 형식이 아닌 응답을 반환했습니다: {ai_response.text}"
+            }
+        except Exception as e:
+            # API 키가 잘못되었거나, 네트워크 오류, 모델 호출 한도 초과 등
+            # 500 Internal Server Error로 응답
+            return Response({"error": f"AI 분석 중 오류 발생: {str(e)}"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
         
-        # 4. (가상) 위치 기반 주변 병원 검색
-        # clinics_list = search_nearby_clinics(user_location)
+        # --- ⬆️ [수정] 3. Gemini API 호출 로직 끝 ⬆️ ---
+        # 4. (가상) 위치 기반 주변 병원 검색 (기존 로직 유지)
+        # --- ⬇️ [수정] 4. (가상) 위치 기반 주변 병원 검색 (실제 API로 교체) ⬇️ ---
         
-        # 5. 예시 응답 반환
+        clinics_list = []
+        kakao_api_key = settings.KAKAO_API_KEY # settings.py에서 키 가져오기
+        
+        # 1. user_location이 제대로 왔는지 확인
+        if not user_location or 'lat' not in user_location or 'lng' not in user_location:
+            clinics_list = [{"id": 0, "name": "위치 정보 없음", "address": "사용자 위치 정보(lat, lng)가 전송되지 않았습니다.", "phone": "", "distance": 0}]
+        else:
+            try:
+                # 2. 위도(lat), 경도(lng) 값을 float(숫자)으로 변환
+                lat = float(user_location['lat'])
+                lng = float(user_location['lng'])
+                
+                # 3. 위에서 만든 헬퍼 함수 호출!
+                clinics_list = search_nearby_clinics(kakao_api_key, lat, lng)
+                
+            except (ValueError, TypeError):
+                 # lat, lng가 숫자가 아닐 경우
+                 clinics_list = [{"id": 0, "name": "위치 정보 오류", "address": "위치 정보(lat, lng) 형식이 잘못되었습니다.", "phone": "", "distance": 0}]
+        
+        # 5. AI 결과와 병원 목록(예시)을 조합하여 최종 응답
         response_data = {
-          "analysis_result": {
-            "suspected_issue": "복통/복부 팽만 (예시)",
-            "recommendation": "우선 금식을 시키고, ... 수의사와 상담하세요. (예시)"
-          },
-          "nearby_clinics": [
-            { "id": 1, "name": "제주 댕냥 동물병원 (예시)", "address": "제주시 연동 123-45", "phone": "064-123-4567", "distance": 1.2 }
-          ]
+          "analysis_result": analysis_result, # ⬅️ 예시 데이터 대신, AI가 생성한 실제 JSON으로 교체
+          "nearby_clinics": clinics_list # ⬅️ 이 부분은 여전히 예시 데이터
         }
         
         return Response(response_data, status=status.HTTP_200_OK)
@@ -470,24 +613,62 @@ class BcsCheckupView(APIView):
     """
     permission_classes = [permissions.IsAuthenticated]
 
+    # class BcsCheckupView(APIView):
+# ...
     def post(self, request, pet_id):
+        # ... (pet 검증 로직은 동일) ...
         try:
             pet = Pet.objects.get(id=pet_id, owner=request.user)
         except Pet.DoesNotExist:
             return Response({"error": "반려동물 정보를 찾을 수 없거나 권한이 없습니다."}, status=status.HTTP_404_NOT_FOUND)
 
-        answers = request.data.get('answers') # 예: [1, 2, 1]
+        answers = request.data.get('answers')
 
-        # 1. (가상) BCS 진단 로직 수행
-        # result_stage = calculate_bcs_stage(answers) 
-        result_stage = "6단계 - 다소 과체중 (예시)" # 예시 결과
+        if not answers or not isinstance(answers, list):
+            return Response({"error": "유효한 'answers' 리스트가 필요합니다."}, status=status.HTTP_400_BAD_REQUEST)
+        
+        try:
+            total_score = sum(answers)
+        except TypeError:
+             return Response({"error": "'answers' 리스트는 숫자 값만 포함해야 합니다."}, status=status.HTTP_400_BAD_REQUEST)
+
+        # --- ⬇️ [수정] 점수 구간에 따른 BCS 단계 결정 로직 (구조화) ⬇️ ---
+        
+        # (참고: 이 점수 구간과 값은 프론트 디자인에 맞춘 예시입니다.)
+        stage_number = 5  # 기본값
+        stage_text = "이상적"    # 기본값
+        
+        if total_score <= 3:
+            stage_number = 3 # "1-3단계" 중 대표값 (프론트와 협의 필요)
+            stage_text = "저체중"
+        elif total_score <= 5:
+            stage_number = 4
+            stage_text = "다소 마름"
+        elif total_score <= 7:
+            stage_number = 5
+            stage_text = "이상적"
+        elif total_score <= 9:
+            stage_number = 6 # 프론트 디자인의 '6단계' 예시에 맞춤
+            stage_text = "다소 과체중"
+        else: # total_score > 9
+            stage_number = 8 # "8-9단계" 중 대표값
+            stage_text = "비만"
+        
+        # --- ⬆️ [수정] 로직 끝 ⬆️ ---
 
         # 2. 결과 DB에 저장
+        # (❗️ 중요: BcsCheckupResult 모델에 stage_number와 stage_text 필드가 추가되어야 합니다)
         result = BcsCheckupResult.objects.create(
             pet=pet,
-            answers=answers,
-            result_stage=result_stage
+            answers=answers,       
+            stage_number=stage_number,  # 예: 6
+            stage_text=stage_text       # 예: "다소 과체중"
+            # 기존 result_stage 필드는 삭제하거나, 
+            # result_stage=f"{stage_number}단계 - {stage_text}" 처럼 조합해서 저장
         )
+        
+        # 3. Serializer를 통해 응답 반환
+        # (❗️ 중요: BcsCheckupResultSerializer도 이 새 필드들을 반환하도록 수정되어야 합니다)
         serializer = BcsCheckupResultSerializer(result)
         
         return Response(serializer.data, status=status.HTTP_201_CREATED)
