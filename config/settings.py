@@ -52,10 +52,10 @@ INSTALLED_APPS = [
     # Local Apps (여기에 추가!)
     'users',
     'pets',
-    'community',
+    'community.apps.CommunityConfig',
+    'notifications.apps.NotificationsConfig', # 알림 앱 등록
 
-    # ⬇️ [아래 2줄을 추가하세요] ⬇️
-    'notifications', # (방금 만든 알림 앱)
+    
 ]
 
 MIDDLEWARE = [
