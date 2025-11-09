@@ -9,6 +9,11 @@ https://docs.djangoproject.com/en/5.2/topics/settings/
 For the full list of settings and their values, see
 https://docs.djangoproject.com/en/5.2/ref/settings/
 """
+import os
+# ⬇️ 1. 이 두 줄을 맨 위에 추가하세요.
+from dotenv import load_dotenv
+load_dotenv() # .env 파일에서 환경 변수를 불러옵니다.
+
 
 from pathlib import Path
 
@@ -47,10 +52,10 @@ INSTALLED_APPS = [
     # Local Apps (여기에 추가!)
     'users',
     'pets',
-    'community',
+    'community.apps.CommunityConfig',
+    'notifications.apps.NotificationsConfig', # 알림 앱 등록
 
-    # ⬇️ [아래 2줄을 추가하세요] ⬇️
-    'notifications', # (방금 만든 알림 앱)
+    
 ]
 
 MIDDLEWARE = [
@@ -135,6 +140,9 @@ STATIC_URL = 'static/'
 # https://docs.djangoproject.com/en/5.2/ref/settings/#default-auto-field
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
+
+GOOGLE_GEMINI_API_KEY = os.environ.get('GOOGLE_GEMINI_API_KEY')
+KAKAO_API_KEY = os.environ.get('KAKAO_API_KEY')
 
 # 1. 커스텀 User 모델 설정
 AUTH_USER_MODEL = 'users.User'
