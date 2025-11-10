@@ -12,7 +12,8 @@ from .views import (
     HealthLogViewSet,
     HealthPageView,
     AiCheckupView,
-    BcsCheckupView
+    BcsCheckupView,
+    ListMyModelsView
 )
 
 # 1. 라우터 생성
@@ -100,4 +101,8 @@ urlpatterns = [
     
     # 7.4 BCS 자가 진단
     path('health/bcs-checkup/<int:pet_id>/', BcsCheckupView.as_view(), name='bcs-checkup'),
+
+    # ⬇️ 2. [추가] 이 URL을 맨 아래에 추가 ⬇️
+    # GET /api/v1/pets/health/list-my-models/
+    path('health/list-my-models/', ListMyModelsView.as_view(), name='list-my-models'),
 ]
