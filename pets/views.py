@@ -517,7 +517,7 @@ class AiCheckupView(APIView):
             genai.configure(api_key=api_key)
 
             # 3-2. AI 모델 및 프롬프트 준비
-            model = genai.GenerativeModel('gemini-1.5-flash') # 최신 모델 (gemini-pro도 가능)
+            model = genai.GenerativeModel('gemini-pro-latest') # 최신 모델 (gemini-pro도 가능)
             
             # 펫의 나이 계산 (HealthPageView 로직 참고)
             pet_age_days = (date.today() - pet.birth_date).days
@@ -561,21 +561,32 @@ class AiCheckupView(APIView):
             # 3-3. AI 모델 호출
             ai_response = model.generate_content(prompt)
             
-            # 3-4. AI 응답(텍스트)을 JSON 객체로 파싱
-            analysis_result = json.loads(ai_response.text)
+           # --- ⬇️ [수정] AI 응답 "청소" 로직 추가 ⬇️ ---
 
-        except json.JSONDecodeError:
-            # AI가 JSON 형식이 아닌 일반 텍스트로 답했을 경우 (예: "죄송합니다...")
+            # 1. AI가 보낸 원본 텍스트를 가져옵니다.
+            ai_text = ai_response.text
+            
+            # 2. 텍스트 앞뒤의 공백과 마크다운(```)을 제거합니다.
+            ai_text_cleaned = ai_text.strip().strip("```json").strip("```").strip()
+            
+            # 3-4. "깨끗해진" 텍스트를 JSON 객체로 파싱
+            try:
+                analysis_result = json.loads(ai_text_cleaned)
+            except json.JSONDecodeError:
+                # 3-5. (예외 처리) 만약 "청소" 후에도 JSON이 아니라면,
+                #      "청소 전" 원본 텍스트를 에러 메시지로 반환합니다.
+                raise ValueError(f"AI가 JSON 형식이 아닌 응답을 반환했습니다: {ai_response.text}")
+
+        except json.JSONDecodeError as e:
+            # 3-6. (기존 예외 처리) 파싱 실패 시
             analysis_result = {
-                "suspected_issue": "AI 응답 분석 실패",
-                "recommendation": f"AI가 JSON 형식이 아닌 응답을 반환했습니다: {ai_response.text}"
+                "analysis": {"issue_title": "AI 응답 분석 실패", "description": f"AI가 JSON 형식이 아닌 응답을 반환했습니다 (JSONDecodeError): {e} \n\n 원본응답: {ai_response.text}"},
+                "recommendations": []
             }
         except Exception as e:
             # API 키가 잘못되었거나, 네트워크 오류, 모델 호출 한도 초과 등
             # 500 Internal Server Error로 응답
             return Response({"error": f"AI 분석 중 오류 발생: {str(e)}"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-        
-        # --- ⬆️ [수정] 3. Gemini API 호출 로직 끝 ⬆️ ---
         # 4. (가상) 위치 기반 주변 병원 검색 (기존 로직 유지)
         # --- ⬇️ [수정] 4. (가상) 위치 기반 주변 병원 검색 (실제 API로 교체) ⬇️ ---
         
@@ -672,3 +683,40 @@ class BcsCheckupView(APIView):
         serializer = BcsCheckupResultSerializer(result)
         
         return Response(serializer.data, status=status.HTTP_201_CREATED)
+
+# pets/views.py
+
+# ... (파일 맨 위에 import google.generativeai as genai... 등등이 있습니다) ...
+# ... (AiCheckupView, BcsCheckupView 클래스... 등등이 있습니다) ...
+
+
+# ⬇️ [추가] 이 클래스를 파일 맨 아래에 붙여넣으세요 ⬇️
+
+class ListMyModelsView(APIView):
+    """
+    [임시 디버깅용] 내 API 키로 사용 가능한 Google AI 모델 목록을 확인합니다.
+    """
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request):
+        try:
+            api_key = settings.GOOGLE_GEMINI_API_KEY
+            if not api_key:
+                raise ValueError("GOOGLE_GEMINI_API_KEY가 설정되지 않았습니다.")
+            
+            genai.configure(api_key=api_key)
+            
+            models_list = []
+            # 내 키로 사용 가능한 모든 모델을 조회합니다.
+            for m in genai.list_models():
+                # 그중에서 'generateContent'(AI 분석)를 지원하는 모델만 필터링합니다.
+                if 'generateContent' in m.supported_generation_methods:
+                    models_list.append(m.name)
+            
+            return Response({
+                "message": "내 API 키로 'generateContent'를 지원하는 모델 목록입니다.",
+                "available_models": models_list
+            }, status=status.HTTP_200_OK)
+            
+        except Exception as e:
+            return Response({"error": f"모델 목록 조회 중 오류 발생: {str(e)}"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
