@@ -1,5 +1,6 @@
 # pets/serializers.py
 from rest_framework import serializers
+from rest_framework.exceptions import ValidationError
 from .models import Pet, CareLog, CalendarSchedule, WalkLog, HealthLog, BcsCheckupResult, MealLog
 from datetime import date
 
@@ -21,6 +22,23 @@ class PetSerializer(serializers.ModelSerializer):
         fields = '__all__'
         # id는 자동으로 생성되므로 읽기 전용으로 설정합니다.
         read_only_fields = ('id', 'owner') # owner도 read_only로 추가
+
+    # ❗️ 2. 이 "validate" 함수를 PetSerializer 클래스 안에 추가하세요.
+    def validate(self, data):
+        """
+        데이터 전체를 검증 (중복 등록 방지)
+        """
+        # '수정(PATCH)'이 아닌 '생성(POST)'일 때만 중복 검사
+        if not self.instance:
+            user = self.context['request'].user
+            pet_name = data.get('name')
+            
+            if Pet.objects.filter(owner=user, name=pet_name).exists():
+                # 이미 존재하면 400 오류 발생
+                raise ValidationError("이미 같은 이름의 반려동물이 등록되어 있습니다.")
+        
+        # 중복이 아니면 데이터를 통과
+        return data
 
 class CareLogSerializer(serializers.ModelSerializer):
     """

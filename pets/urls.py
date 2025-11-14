@@ -21,7 +21,7 @@ router = DefaultRouter()
 
 # 2. PetViewSet과 CareLogViewSet만 라우터에 등록
 # (PetViewSet은 /pets/, /pets/{pk}/ 경로들을 자동으로 생성)
-router.register(r'pets', PetViewSet, basename='pet')
+router.register(r'', PetViewSet, basename='pet')
 # (CareLogViewSet은 /carelogs/items/{pk}/ 경로들(수정,삭제)을 자동으로 생성)
 router.register(r'carelogs/items', CareLogViewSet, basename='carelog-items')
 # ❗️ 캘린더와 활동은 URL 구조가 복잡하므로 라우터에 등록하지 않고 수동으로 정의합니다.

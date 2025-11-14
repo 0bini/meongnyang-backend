@@ -1,3 +1,4 @@
+import random # 👈 1. 이 줄을 추가합니다
 from rest_framework import viewsets, permissions, status
 from rest_framework.views import APIView
 from rest_framework.response import Response
@@ -233,20 +234,45 @@ class DashboardView(APIView):
             "graph_data": weight_graph_data
         }
 
-        # 5. 음식 가이드 (API 4.1 - food_guide)
-        # (이 부분은 DB에 별도 Food 모델로 저장해두고 가져오는 것이 좋습니다.)
+# 5. 음식 가이드 (API 4.1 - food_guide)
+        # ❗️ [수정] 랜덤으로 팁을 제공하도록 로직 변경
+
+        # --- 1. 전체 데이터 풀 (Pool) ---
+        # (여기에 원하시는 만큼 팁을 더 추가하시면 됩니다!)
+        ALL_GOOD_FOODS = [
+            { "id": 1, "name": "당근, 고구마, 브로콜리", "description": "적정량 주면 소화에 좋아요. (소량만)" },
+            { "id": 2, "name": "사과, 배, 바나나", "description": "씨와 껍질을 벗겨 반드시 제거하고 주세요." },
+            { "id": 3, "name": "블루베리", "description": "항산화 성분이 풍부해 눈 건강에 좋아요." },
+            { "id": 4, "name": "삶은 닭가슴살 (무염)", "description": "훌륭한 단백질 공급원입니다." },
+            { "id": 5, "name": "수박 (씨 제외)", "description": "수분 보충에 좋지만, 당분이 많아 소량만!" }
+        ]
+
+        ALL_BAD_FOODS = [
+            { "id": 101, "name": "초콜릿", "description": "테오브로민 성분은 매우 치명적이에요." },
+            { "id": 102, "name": "양파, 마늘, 파", "description": "적혈구를 파괴하여 빈혈을 유발해요." },
+            { "id": 103, "name": "포도, 건포도", "description": "급성 신부전을 유발할 수 있습니다." },
+            { "id": 104, "name": "카페인 (커피, 차)", "description": "신경계를 자극해 중독을 일으킬 수 있어요." },
+            { "id": 105, "name": "유제품 (우유, 치즈)", "description": "유당 불내증이 있는 경우 설사를 유발해요." }
+        ]
+
+        # --- 2. 랜덤으로 2개씩 선택 ---
+        try:
+            # 전체 목록(ALL_GOOD_FOODS)에서 2개(k=2)를 랜덤 샘플링합니다.
+            random_good_foods = random.sample(ALL_GOOD_FOODS, k=2) 
+            random_bad_foods = random.sample(ALL_BAD_FOODS, k=2)
+        except ValueError:
+            # (예외처리) 만약 마스터 리스트가 2개 미만일 경우, 그냥 전체를 반환
+            random_good_foods = ALL_GOOD_FOODS
+            random_bad_foods = ALL_BAD_FOODS
+
+        # --- 3. 최종 데이터 조합 ---
         food_guide_data = {
-            "good_foods": [
-                { "id": 1, "name": "당근, 고구마, 브로콜리", "description": "적정량 주면 소화에 좋아요. (소량만)" },
-                { "id": 2, "name": "사과, 배, 바나나", "description": "씨와 껍질을 벗겨 반드시 제거하고 주세요." }
-            ],
-            "bad_foods": [
-                { "id": 3, "name": "초콜릿", "description": "테오브로민 성분은 매우 치명적이에요." },
-                { "id": 4, "name": "양파, 마늘, 파", "description": "적혈구를 파괴하여 빈혈을 유발해요." }
-            ]
+            "good_foods": random_good_foods,
+            "bad_foods": random_bad_foods
         }
 
-        # 6. 모든 데이터를 API 명세서 형식에 맞춰 조합
+        # --- 6. 모든 데이터를 API 명세서 형식에 맞춰 조합 ---
+        # ❗️ [수정 완료] 이 블록을 왼쪽으로 당겨서 들여쓰기를 맞췄습니다.
         response_data = {
             "care_list": care_list_data,
             "upcoming_schedules": schedule_serializer.data,
