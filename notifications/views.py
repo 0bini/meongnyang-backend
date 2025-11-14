@@ -8,35 +8,28 @@ from .serializers import NotificationSerializer
 class NotificationListView(generics.ListAPIView):
     """
     API 명세서 10.1: 알림 목록 조회 (GET /notifications/)
-    - 로그인한 본인의 알림 목록만 반환합니다.
+    - [수정] 로그인한 본인의 "모든" 알림 목록을 반환합니다.
     """
     serializer_class = NotificationSerializer
     permission_classes = [permissions.IsAuthenticated] # ❗️ 로그인 필수
 
     def get_queryset(self):
-        # 1. 요청을 보낸 사용자(request.user)의 알림만 필터링
-        queryset = Notification.objects.filter(user=self.request.user)
+        # ❗️ [수정] "is_read=False" 필터를 "삭제"합니다.
+        # 프론트엔드가 모든 알림을 받아 직접 '읽음'/'안읽음'을 구분합니다.
+        queryset = Notification.objects.filter(
+            user=self.request.user
+        ).order_by('-created_at') # 👈 is_read=False 필터 삭제
         return queryset
 
-    def list(self, request, *args, **kwargs):
-        queryset = self.get_queryset()
-        serializer = self.get_serializer(queryset, many=True)
-        
-        # 2. 읽지 않은 알림 개수 계산
-        unread_count = queryset.filter(is_read=False).count()
-        
-        # 3. API 명세서 10.1 형식에 맞게 응답 데이터 재구성
-        response_data = {
-            "unread_count": unread_count,
-            "notifications": serializer.data
-        }
-        
-        return Response(response_data, status=status.HTTP_200_OK)
+    # ❗️ [삭제 완료] list 메서드를 삭제했습니다.
+    # generics.ListAPIView가 get_queryset 결과를 
+    # 자동으로 [ ... ] 리스트로 반환해 줍니다.
 
 
 class NotificationReadView(APIView):
     """
     API 명세서 10.2: 특정 알림 읽음 처리 (POST /notifications/<int:notification_id>/read/)
+    (이 코드는 완벽하므로 수정할 필요 없습니다.)
     """
     permission_classes = [permissions.IsAuthenticated]
 
@@ -62,6 +55,7 @@ class NotificationReadView(APIView):
 class NotificationReadAllView(APIView):
     """
     API 명세서 10.2: 모든 알림 읽음 처리 (POST /notifications/read-all/)
+    (이 코드는 완벽하므로 수정할 필요 없습니다.)
     """
     permission_classes = [permissions.IsAuthenticated]
 

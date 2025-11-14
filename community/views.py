@@ -11,6 +11,8 @@ from .models import Post, Comment, Message
 from .serializers import PostSerializer, CommentSerializer, MessageSerializer
 # ❗️ [수정] UserSerializer import
 from users.serializers import UserSerializer
+# ❗️ [추가] Notification 모델 import
+from notifications.models import Notification
 
 User = get_user_model() # ❗️ User 모델 정의
 
@@ -112,72 +114,77 @@ class LikeView(APIView):
             
         # 현재 좋아요 개수를 포함하여 응답
         return Response({"message": message, "likes_count": post.likes.count()}, status=status.HTTP_200_OK)
-# --- 쪽지 API (API 9.x) ---
 
-# ❗️ [오류 수정] MessageConversationListView와 MessageSendView를 
-# ❗️ 하나의 'MessageView'로 통합하여 405 오류 해결
+# --- 쪽지 API (API 9.x) ---
 
 class MessageView(APIView):
     """
     API 명세서 9.1 (GET) & 9.3 (POST) 통합 View
-    - GET /community/messages/ (대화방 목록 조회)
+    - GET /community/messages/ (모든 쪽지 목록 조회)
     - POST /community/messages/ (쪽지 전송)
     """
     permission_classes = [permissions.IsAuthenticated]
 
     def get(self, request):
         """
-        API 명세서 9.1: 대화방 목록 조회
+        [수정됨] API 명세서 9.1: 대화방 목록 대신,
+        이 유저가 포함된 "모든" 쪽지 목록을 반환합니다.
+        (프론트엔드 Chat.js가 이 데이터를 기반으로 스레드를 그룹화합니다.)
         """
         user = request.user
-        involved_messages = Message.objects.filter(Q(sender=user) | Q(receiver=user))
         
-        sent_to_users = involved_messages.filter(sender=user).values_list('receiver', flat=True)
-        received_from_users = involved_messages.filter(receiver=user).values_list('sender', flat=True)
-        
-        participant_ids = set(list(sent_to_users) + list(received_from_users))
+        # 이 유저가 보냈거나(sender=user) 또는 받은(receiver=user) 모든 메시지를 찾습니다.
+        all_messages = Message.objects.filter(
+            Q(sender=user) | Q(receiver=user)
+        ).order_by('sent_at') # 시간순 정렬
 
-        conversations = []
-        for user_id in participant_ids:
-            try:
-                participant = User.objects.get(id=user_id)
-                latest_message = Message.objects.filter(
-                    (Q(sender=user) & Q(receiver=participant)) |
-                    (Q(sender=participant) & Q(receiver=user))
-                ).latest('sent_at') 
-                
-                conversations.append({
-                    "participant": UserSerializer(participant).data,
-                    "latest_message": MessageSerializer(latest_message).data
-                })
-            except (User.DoesNotExist, Message.DoesNotExist):
-                continue
-
-        conversations.sort(key=lambda x: x['latest_message']['sent_at'], reverse=True)
-        
-        return Response(conversations, status=status.HTTP_200_OK)
+        serializer = MessageSerializer(all_messages, many=True)
+        return Response(serializer.data, status=status.HTTP_200_OK)
 
     def post(self, request):
         """
-        API 명세서 9.3: 쪽지 전송
+        [수정됨] API 명세서 9.3: 쪽지 전송
+        (receiver_username 대신 receiver ID를 받도록 수정)
+        (알림 생성 로직 추가)
         """
         sender = request.user
-        receiver_username = request.data.get('receiver_username')
+        
+        # [수정] 'receiver_username' 대신 'receiver' (ID)를 받습니다.
+        receiver_id = request.data.get('receiver')
         content = request.data.get('content')
 
-        if not receiver_username or not content:
-            return Response({"error": "받는 사람과 내용이 필요합니다."}, status=status.HTTP_400_BAD_REQUEST)
+        # [수정] receiver_id로 검증합니다.
+        if not receiver_id or not content:
+            return Response({"error": "받는 사람 ID와 내용이 필요합니다."}, status=status.HTTP_400_BAD_REQUEST)
         
         try:
-            receiver = User.objects.get(username=receiver_username)
+            # [수정] username= 대신 id= (pk=)로 유저를 찾습니다.
+            receiver = User.objects.get(id=receiver_id)
         except User.DoesNotExist:
             return Response({"error": "해당 사용자를 찾을 수 없습니다."}, status=status.HTTP_404_NOT_FOUND)
+
+        # [추가] 자기 자신에게 쪽지를 보내는지 확인
+        if sender == receiver:
+            return Response({"error": "자기 자신에게는 쪽지를 보낼 수 없습니다."}, status=status.HTTP_400_BAD_REQUEST)
 
         message = Message.objects.create(
             sender=sender,
             receiver=receiver,
             content=content
         )
+        
+        # [추가] 쪽지 전송 성공 시, 알림(Notification) 객체 생성
+        try:
+            Notification.objects.create(
+                user=receiver,  # 👈 알림을 받을 사람 (쪽지 수신자)
+                sender=sender,      # 👈 [추가!] 알림을 유발한 사람 (쪽지 보낸 사람)
+                message=f"'{sender.nickname or sender.username}'님으로부터 새 쪽지가 도착했습니다.",
+                notification_type='MESSAGE' # 👈 알림 타입 (예시)
+            )
+        except Exception:
+            # 알림 생성에 실패하더라도 쪽지 전송은 성공해야 하므로, 오류를 무시합니다.
+            pass 
+        
         serializer = MessageSerializer(message)
         return Response(serializer.data, status=status.HTTP_201_CREATED)
 
