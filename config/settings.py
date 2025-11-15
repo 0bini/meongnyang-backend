@@ -30,7 +30,7 @@ SECRET_KEY = 'django-insecure-^vc-n=yuzxen3!t9*pzf=43nq8t7%pkvq9mc$5qg-5+4jnc(42
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
 
-ALLOWED_HOSTS = ['172.20.33.191', '127.0.0.1', 'localhost','10.110.192.1']                 # <--- 만약을 위해 이것도 추가하는 것을 권장합니다.]
+ALLOWED_HOSTS = ['172.20.33.191', '127.0.0.1', 'localhost','10.110.192.1', 'youngbin.pythonanywhere.com']
 
 
 # Application definition
