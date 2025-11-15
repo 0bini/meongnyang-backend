@@ -94,8 +94,12 @@ WSGI_APPLICATION = 'config.wsgi.application'
 
 DATABASES = {
     'default': {
-        'ENGINE': 'django.db.backends.sqlite3',
-        'NAME': BASE_DIR / 'db.sqlite3',
+        'ENGINE': 'django.db.backends.mysql',
+        'NAME': 'youngbin$mungnyang_db',     # 'Databases' 탭에서 확인한 이름
+        'USER': 'youngbin',                 # 본인 아이디
+        'PASSWORD': 'rhdrhdclfQkd!', # ❗️ Databases 탭에서 설정했던 비번
+        'HOST': 'youngbin.mysql.pythonanywhere-services.com', # 'Databases' 탭에서 확인한 주소
+        'PORT': '3306',
     }
 }
 

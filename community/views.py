@@ -177,7 +177,6 @@ class MessageView(APIView):
         try:
             Notification.objects.create(
                 user=receiver,  # 👈 알림을 받을 사람 (쪽지 수신자)
-                sender=sender,      # 👈 [추가!] 알림을 유발한 사람 (쪽지 보낸 사람)
                 message=f"'{sender.nickname or sender.username}'님으로부터 새 쪽지가 도착했습니다.",
                 notification_type='MESSAGE' # 👈 알림 타입 (예시)
             )
