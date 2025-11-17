@@ -51,9 +51,9 @@ urlpatterns = [
     path('activities/logs/<int:pet_id>/', WalkLogViewSet.as_view({'post': 'create'}), name='walklog-create'), 
 
     # 3.6 활동 기록 수정/삭제/상세조회 (API 5.3)
-    # GET, PUT, DELETE /activities/logs/<log_id>/
+    # GET, PUT, DELETE /activities/logs/items/<log_id>/
     # (pk는 WalkLog의 id를 의미합니다)
-    path('activities/logs/<int:pk>/', WalkLogViewSet.as_view({
+    path('activities/logs/items/<int:pk>/', WalkLogViewSet.as_view({
         'get': 'retrieve',
         'put': 'update',
         'patch': 'partial_update',
