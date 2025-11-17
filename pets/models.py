@@ -2,6 +2,11 @@ from django.db import models
 from users.models import User # users 앱의 User 모델 import
 from django.utils import timezone
 
+# --- Helper 함수 ---
+def get_current_date():
+    """현재 날짜를 반환하는 함수 (DateField default용)"""
+    return timezone.now().date()
+
 # --- Choices 정의 (선택 필드용) ---
 SPECIES_CHOICES = [('강아지', '강아지'), ('고양이', '고양이')]
 GENDER_CHOICES = [('수컷', '수컷'), ('암컷', '암컷')]
@@ -37,7 +42,7 @@ class Pet(models.Model):
 class MealLog(models.Model):
     """식사 기록 모델"""
     pet = models.ForeignKey(Pet, on_delete=models.CASCADE, related_name='meal_logs')
-    log_date = models.DateField(verbose_name='기록 날짜', default=timezone.now)
+    log_date = models.DateField(verbose_name='기록 날짜', default=get_current_date)
     food_type = models.CharField(max_length=50, choices=MEAL_TYPES, verbose_name='종류 (사료, 간식 등)')
     food_name = models.CharField(max_length=100, verbose_name="사료/간식 이름")
     quantity_g = models.FloatField(verbose_name="양(g)")
@@ -50,7 +55,7 @@ class MealLog(models.Model):
 class WalkLog(models.Model):
     """활동(산책) 기록 모델"""
     pet = models.ForeignKey(Pet, on_delete=models.CASCADE, related_name='walk_logs')
-    log_date = models.DateField(verbose_name='기록 날짜', default=timezone.now)
+    log_date = models.DateField(verbose_name='기록 날짜', default=get_current_date)
     log_type = models.CharField(max_length=50, choices=ACTIVITY_TYPES, verbose_name='활동 종류', default='산책')
     duration = models.IntegerField(verbose_name="활동 시간(분)")
     distance = models.FloatField(blank=True, null=True, verbose_name="이동 거리(km, 선택)")
@@ -89,7 +94,7 @@ class CalendarSchedule(models.Model):
 class CareLog(models.Model):
     """오늘의 케어 리스트 항목 모델"""
     pet = models.ForeignKey(Pet, on_delete=models.CASCADE, related_name='care_logs')
-    log_date = models.DateField(verbose_name='해당 날짜', default=timezone.now)
+    log_date = models.DateField(verbose_name='해당 날짜', default=get_current_date)
     content = models.CharField(max_length=200, verbose_name="할 일 내용") # 디자인상 자유 입력
     is_complete = models.BooleanField(default=False, verbose_name="완료 여부")
     created_at = models.DateTimeField(auto_now_add=True)
