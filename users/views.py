@@ -84,10 +84,9 @@ class UserProfileView(generics.RetrieveUpdateDestroyAPIView):
 
     def perform_destroy(self, instance):
         """
-        회원 탈퇴 시 DB에서 완전히 삭제하는 대신, is_active=False로 변경합니다.
+        회원 탈퇴 시 DB에서 완전히 삭제합니다. (Hard Delete)
         """
-        instance.is_active = False
-        instance.save()
+        instance.delete()
 
     # GET, PUT, PATCH, DELETE은 RetrieveUpdateDestroyAPIView가 자동으로 처리합니다.
     # (username은 serializer에서 read_only로 설정했기 때문에 수정되지 않습니다.)
@@ -110,18 +109,9 @@ class UnregisterView(generics.DestroyAPIView):
 
     def perform_destroy(self, instance):
         """
-        회원 탈퇴 시 DB에서 완전히 삭제하는 대신, is_active=False로 변경합니다.
-        (멍냥멍냥 서비스 정책에 따라 주석 중 하나를 선택하세요.)
+        회원 탈퇴 시 DB에서 완전히 삭제합니다. (Hard Delete)
         """
-        # [선택 1: DB에서 완전 삭제 (기본 동작)]
-        # instance.delete() 
-        
-        # [선택 2: 비활성화 처리 (권장)]
-        # -> 커뮤니티 게시글, 쪽지 등 다른 데이터와의 관계 유지를 위해 좋습니다.
-        instance.is_active = False
-        instance.save()
-        
-        # TODO: S3 등에서 프로필 이미지 등 리소스 삭제 로직 추가 가능
+        instance.delete()
 
 
 # ⬇️ [추가] API 2.6 (사용자 검색)
