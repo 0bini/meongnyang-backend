@@ -64,11 +64,12 @@ class LoginView(APIView):
             # 6. 인증에 실패했다면 (아이디 또는 비밀번호 불일치)
             return Response({"error": "아이디 또는 비밀번호가 일치하지 않습니다."}, status=status.HTTP_401_UNAUTHORIZED)
         
-        # ⬇️ [추가] API 2.3 (계정 설정 조회) & 2.4 (계정 설정 수정)
-class UserProfileView(generics.RetrieveUpdateAPIView):
+        # ⬇️ [추가] API 2.3 (계정 설정 조회) & 2.4 (계정 설정 수정) & 2.5 (회원 탈퇴)
+class UserProfileView(generics.RetrieveUpdateDestroyAPIView):
     """
     (API 2.3) 계정 설정 조회 (GET)
     (API 2.4) 계정 설정 수정 (PUT, PATCH)
+    (API 2.5) 회원 탈퇴 (DELETE)
     - 요청자 본인(request.user)의 정보만 처리합니다.
     """
     queryset = User.objects.all()
@@ -81,7 +82,14 @@ class UserProfileView(generics.RetrieveUpdateAPIView):
         """
         return self.request.user
 
-    # PUT, PATCH, GET(retrieve)은 RetrieveUpdateAPIView가 자동으로 처리합니다.
+    def perform_destroy(self, instance):
+        """
+        회원 탈퇴 시 DB에서 완전히 삭제하는 대신, is_active=False로 변경합니다.
+        """
+        instance.is_active = False
+        instance.save()
+
+    # GET, PUT, PATCH, DELETE은 RetrieveUpdateDestroyAPIView가 자동으로 처리합니다.
     # (username은 serializer에서 read_only로 설정했기 때문에 수정되지 않습니다.)
 
 
