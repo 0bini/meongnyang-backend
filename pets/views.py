@@ -684,30 +684,24 @@ class BcsCheckupView(APIView):
             return Response({"error": "유효한 'answers' 리스트가 필요합니다."}, status=status.HTTP_400_BAD_REQUEST)
         
         try:
-            total_score = sum(answers)
+            # ⭐️ [수정] 프론트엔드와 동일하게 평균 계산
+            average_score = sum(answers) / len(answers)
+            total_score = round(average_score)  # 반올림하여 최종 점수
         except TypeError:
              return Response({"error": "'answers' 리스트는 숫자 값만 포함해야 합니다."}, status=status.HTTP_400_BAD_REQUEST)
 
-        # --- ⬇️ [수정] 점수 구간에 따른 BCS 단계 결정 로직 (구조화) ⬇️ ---
+        # --- ⬇️ [수정] 프론트엔드와 동일한 BCS 단계 결정 로직 ⬇️ ---
         
-        # (참고: 이 점수 구간과 값은 프론트 디자인에 맞춘 예시입니다.)
-        stage_number = 5  # 기본값
+        stage_number = total_score  # 평균값을 그대로 사용
         stage_text = "이상적"    # 기본값
         
         if total_score <= 3:
-            stage_number = 3 # "1-3단계" 중 대표값 (프론트와 협의 필요)
             stage_text = "저체중"
         elif total_score <= 5:
-            stage_number = 4
-            stage_text = "다소 마름"
+            stage_text = "이상적인 체중"
         elif total_score <= 7:
-            stage_number = 5
-            stage_text = "이상적"
-        elif total_score <= 9:
-            stage_number = 6 # 프론트 디자인의 '6단계' 예시에 맞춤
             stage_text = "다소 과체중"
-        else: # total_score > 9
-            stage_number = 8 # "8-9단계" 중 대표값
+        else: # total_score > 7
             stage_text = "비만"
         
         # --- ⬆️ [수정] 로직 끝 ⬆️ ---
