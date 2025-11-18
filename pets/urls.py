@@ -71,9 +71,9 @@ urlpatterns = [
     path('calendar/schedules/<int:pet_id>/', CalendarScheduleViewSet.as_view({'post': 'create'}), name='calendar-create'),
     
     # 3.9 일정 수정/삭제/상세조회 (API 6.3)
-    # GET, PUT, DELETE /calendar/schedules/<schedule_id>/
+    # GET, PUT, DELETE /calendar/schedules/items/<schedule_id>/
     # (pk는 CalendarSchedule의 id를 의미합니다)
-    path('calendar/schedules/<int:pk>/', CalendarScheduleViewSet.as_view({
+    path('calendar/schedules/items/<int:pk>/', CalendarScheduleViewSet.as_view({
         'get': 'retrieve',
         'put': 'update',
         'patch': 'partial_update',
