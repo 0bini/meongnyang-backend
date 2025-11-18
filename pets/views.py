@@ -495,12 +495,19 @@ class HealthPageView(APIView):
         logs_serializer = HealthLogSerializer(recent_health_logs, many=True)
         
         # 3. 반려동물 기본 건강 정보
+        # BCS 정보 가져오기
+        latest_bcs = BcsCheckupResult.objects.filter(pet=pet).order_by('-checkup_date').first()
+        bcs_value = "미입력"
+        if latest_bcs:
+            # "6단계 - 다소 과체중" 형식으로 반환
+            bcs_value = f"{latest_bcs.stage_number}단계 - {latest_bcs.stage_text}"
+        
         pet_info = {
             "name": pet.name,
             "breed": pet.breed,
             "current_weight": pet.weight,
             "age": (date.today() - pet.birth_date).days // 365, # 간단한 나이 계산
-            "bcs": BcsCheckupResult.objects.filter(pet=pet).last().result_stage if BcsCheckupResult.objects.filter(pet=pet).exists() else "측정 안함"
+            "bcs": bcs_value
         }
 
         response_data = {
