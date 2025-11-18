@@ -89,7 +89,7 @@ urlpatterns = [
     path('health/logs/<int:pet_id>/', HealthLogViewSet.as_view({'post': 'create'}), name='healthlog-create'),
     
     # 7.2 건강 기록 수정/삭제/상세조회 (HealthLogViewSet의 나머지 액션)
-    path('health/logs/<int:pk>/', HealthLogViewSet.as_view({
+    path('health/logs/items/<int:pk>/', HealthLogViewSet.as_view({
         'get': 'retrieve',
         'put': 'update',
         'patch': 'partial_update',
