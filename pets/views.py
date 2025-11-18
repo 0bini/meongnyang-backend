@@ -666,9 +666,21 @@ class BcsCheckupView(APIView):
         except Pet.DoesNotExist:
             return Response({"error": "반려동물 정보를 찾을 수 없거나 권한이 없습니다."}, status=status.HTTP_404_NOT_FOUND)
 
+        # 프론트엔드가 보내는 형식 (q1_score, q2_score, q3_score) 또는 answers 배열 모두 처리
         answers = request.data.get('answers')
-
-        if not answers or not isinstance(answers, list):
+        
+        if not answers:
+            # 프론트엔드가 q1_score 형식으로 보내는 경우
+            q1_score = request.data.get('q1_score')
+            q2_score = request.data.get('q2_score')
+            q3_score = request.data.get('q3_score')
+            
+            if q1_score is not None and q2_score is not None and q3_score is not None:
+                answers = [q1_score, q2_score, q3_score]
+            else:
+                return Response({"error": "유효한 'answers' 리스트 또는 q1_score, q2_score, q3_score가 필요합니다."}, status=status.HTTP_400_BAD_REQUEST)
+        
+        if not isinstance(answers, list):
             return Response({"error": "유효한 'answers' 리스트가 필요합니다."}, status=status.HTTP_400_BAD_REQUEST)
         
         try:
