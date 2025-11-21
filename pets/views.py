@@ -591,8 +591,46 @@ class AiCheckupView(APIView):
             }}
             """
 
-            # 3-3. AI 모델 호출
-            ai_response = model.generate_content(prompt)
+            # 3-3. AI 모델 호출 (429 에러 처리 추가)
+            try:
+                ai_response = model.generate_content(prompt)
+            except Exception as api_error:
+                # 429 에러 또는 quota 관련 에러 확인
+                error_message = str(api_error).lower()
+                if "429" in error_message or "quota" in error_message or "resource" in error_message:
+                    # 할당량 초과 시 샘플 데이터 반환
+                    analysis_result = {
+                        "analysis": {
+                            "issue_title": f"{symptoms_str} 관련 주의 사항",
+                            "description": f"선택하신 증상({symptoms_str})은 반려동물에게 불편함을 줄 수 있습니다. 증상이 지속되거나 악화될 경우 즉시 수의사와 상담하시기 바랍니다."
+                        },
+                        "recommendations": [
+                            "증상이 24시간 이상 지속되면 동물병원 방문을 권장합니다.",
+                            "충분한 수분 섭취를 유지하고, 편안한 환경을 제공해주세요.",
+                            "급격한 식단 변화는 피하고, 평소 식사량을 유지해주세요."
+                        ]
+                    }
+                    # Kakao 병원 검색은 정상 진행
+                    kakao_api_key = settings.KAKAO_API_KEY
+                    clinics_list = []
+                    if not user_location or 'lat' not in user_location or 'lng' not in user_location:
+                        clinics_list = [{"id": 0, "name": "위치 정보 없음", "subtitle": "사용자 위치 정보(lat, lng)가 전송되지 않았습니다.", "phone": ""}]
+                    else:
+                        try:
+                            lat = float(user_location['lat'])
+                            lng = float(user_location['lng'])
+                            clinics_list = search_nearby_clinics(kakao_api_key, lat, lng)
+                        except (ValueError, TypeError):
+                            clinics_list = [{"id": 0, "name": "위치 정보 오류", "subtitle": "위치 정보(lat, lng) 형식이 잘못되었습니다.", "phone": ""}]
+                    
+                    response_data = {
+                        "analysis_result": analysis_result,
+                        "nearby_clinics": clinics_list
+                    }
+                    return Response(response_data, status=status.HTTP_200_OK)
+                else:
+                    # 다른 에러는 그대로 발생시킴
+                    raise api_error
             
            # --- ⬇️ [수정] AI 응답 "청소" 로직 추가 ⬇️ ---
 
